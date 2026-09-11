@@ -192,11 +192,16 @@ module.exports = class VThermoApp extends Homey.App {
     }
 
     private async getOrCreateHomeyApi(): Promise<HomeyAPI | undefined> {
+        let recreated = false;
         if (this.homeyApi && this.homeyApiCreated && Date.now() - this.homeyApiCreated > HOMEY_API_RECREATE_INTERVAL) {
             await this.destroyHomeyApi();
+            recreated = true;
         }
         if (!this.homeyApi) {
             await this.createHomeyApi();
+        }
+        if (recreated) {
+            this.scheduleRefresh(0);
         }
         return this.homeyApi;
     }
@@ -208,6 +213,10 @@ module.exports = class VThermoApp extends Homey.App {
         }
         this.homeyApi = undefined;
         this.homeyApiCreated = undefined;
+
+        if (this.devicesObj) {
+            this.devicesObj.destroy();
+        }
 
         try {
             homeyApi.devices.removeListener('device.create', this._deviceCreateListener);
@@ -222,6 +231,15 @@ module.exports = class VThermoApp extends Homey.App {
             homeyApi.zones.removeListener('zone.delete', this._zoneDeleteListener);
         } catch (err) {
             this.logger.error(`Removing HomeyAPI zone listeners failed`, err);
+        }
+        if (homeyApi.system) {
+            try {
+                if (homeyApi.system.isConnected?.()) {
+                    await homeyApi.system.disconnect();
+                }
+            } catch (err) {
+                this.logger.error(`Disconnecting HomeyAPI system failed`, err);
+            }
         }
         try {
             await homeyApi.devices.disconnect();
@@ -273,13 +291,13 @@ module.exports = class VThermoApp extends Homey.App {
         return systemInfo.uptime;
     }
 
-    private async isHomeyBooting(): Promise<boolean> {
+    private async isHomeyBooting(deviceCount?: number): Promise<boolean> {
         const uptime = await this.getUptime();
         if (uptime < 600) {
             this.logger.debug(`Homey is booting: Update: ${uptime} seconds.`);
             return true;
         }
-        const runningDevices = Object.keys(await this.getDevices()).length;
+        const runningDevices = deviceCount !== undefined ? deviceCount : Object.keys(await this.getDevices()).length;
         if (!this._lastNumRunningDevices || runningDevices !== this._lastNumRunningDevices) {
             this._lastNumRunningDevices = runningDevices;
             this.logger.debug(`Homey is booting: Current devices: ${runningDevices}`);
@@ -321,15 +339,18 @@ module.exports = class VThermoApp extends Homey.App {
         return this.homeyApi.devices.getDevice({id});
     }
 
-    private async fetchDevices(): Promise<void> {
+    private async fetchDevices(): Promise<number> {
         try {
             this.logger.debug(`Devices fetch started`);
             const now = Date.now();
             const devices = await this.getDevices();
-            this.logger.info(`Devices fetched. (${Object.keys(devices).length} in ${Date.now() - now} ms.)`);
+            const count = Object.keys(devices).length;
+            this.logger.info(`Devices fetched. (${count} in ${Date.now() - now} ms.)`);
             this.devicesObj.registerDevices(devices);
+            return count;
         } catch (err) {
             this.logger.error(`Fetch devices failed`, err);
+            return 0;
         }
     }
 
@@ -355,15 +376,16 @@ module.exports = class VThermoApp extends Homey.App {
     }
 
     private async refresh(): Promise<void> {
+        let deviceCount: number | undefined;
         try {
             await this.fetchZones();
-            await this.fetchDevices();
+            deviceCount = await this.fetchDevices();
         } catch (err) {
             this.logger.error(`Refresh zones and devices failed`, err);
         } finally {
             let homeyIsBooting;
             try {
-                homeyIsBooting = await this.isHomeyBooting();
+                homeyIsBooting = await this.isHomeyBooting(deviceCount);
             } catch (err) {
                 this.logger.error(`Failed checking if Homey is booting`, err);
                 homeyIsBooting = true;

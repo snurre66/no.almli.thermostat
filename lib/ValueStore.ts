@@ -15,6 +15,10 @@ export class ValueStore {
         return this._store;
     }
 
+    clear(): void {
+        this._store.clear();
+    }
+
     addValue(aValue: number, aTimestamp: number): void {
         const now = aTimestamp || new Date().getTime();
         this._store.set(now, aValue);

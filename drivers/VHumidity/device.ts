@@ -67,9 +67,12 @@ module.exports = class VHumidityDevice extends BaseDevice {
         ) {
             this.setCapabilityValue('onoff', true).catch(err => this.log(err));
         }
-        this.homey.setTimeout(() => {
-            // @ts-ignore
-            this.homey.app.startCalculation();
-        }, 1000);
+        // Keep the Web API-backed model in sync before calculation.
+        // @ts-ignore
+        this.homey.app.updateSettingsByDataId(this.getData().id, newSettings);
+    }
+
+    async onUninit(): Promise<void> {
+        this._humidityStore?.clear();
     }
 };

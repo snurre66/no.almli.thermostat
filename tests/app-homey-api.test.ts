@@ -19,21 +19,23 @@ function makeManager(connect = vi.fn().mockResolvedValue(undefined)) {
         disconnect: vi.fn().mockResolvedValue(undefined),
         on: vi.fn(),
         removeListener: vi.fn(),
+        isConnected: vi.fn().mockReturnValue(true),
     };
 }
 
-function makeApi(devices = makeManager(), zones = makeManager()) {
+function makeApi(devices = makeManager(), zones = makeManager(), system?: any) {
     return {
         devices,
         zones,
+        system,
         destroy: vi.fn().mockResolvedValue(undefined),
     };
 }
 
 function makeApp() {
     const app = new VThermoApp();
-    app.homey = {clearTimeout: vi.fn()};
-    app.logger = {debug: vi.fn(), error: vi.fn(), verbose: vi.fn()};
+    app.homey = {clearTimeout: vi.fn(), setTimeout: vi.fn()};
+    app.logger = {debug: vi.fn(), error: vi.fn(), verbose: vi.fn(), info: vi.fn(), silly: vi.fn()};
     return app;
 }
 
@@ -96,5 +98,49 @@ describe('Homey API manager lifecycle', () => {
         finishDisconnect();
         await shutdown;
         expect(api.destroy).toHaveBeenCalledOnce();
+    });
+
+    it('destroys capability instances in devicesObj and disconnects system manager during API teardown', async () => {
+        const system = makeManager();
+        const api = makeApi(makeManager(), makeManager(), system);
+        const app = makeApp();
+        app.homeyApi = api;
+        app.devicesObj = {destroy: vi.fn()};
+
+        await app.destroyHomeyApi();
+
+        expect(app.devicesObj.destroy).toHaveBeenCalledOnce();
+        expect(system.disconnect).toHaveBeenCalledOnce();
+        expect(api.destroy).toHaveBeenCalledOnce();
+    });
+
+    it('schedules an immediate refresh when recreating HomeyAPI after expiry', async () => {
+        const oldApi = makeApi();
+        const newApi = makeApi();
+        createAppAPI.mockResolvedValueOnce(newApi);
+        const app = makeApp();
+        app.homeyApi = oldApi;
+        app.homeyApiCreated = Date.now() - 86400 * 1000 * 11; // 11 days ago
+        app.devicesObj = {destroy: vi.fn()};
+        app.scheduleRefresh = vi.fn();
+
+        await app.getOrCreateHomeyApi();
+
+        expect(app.scheduleRefresh).toHaveBeenCalledWith(0);
+        expect(app.homeyApi).toBe(newApi);
+    });
+
+    it('reuses device count from fetchDevices in isHomeyBooting to avoid duplicate getDevices calls', async () => {
+        const app = makeApp();
+        app.fetchZones = vi.fn().mockResolvedValue(undefined);
+        app.fetchDevices = vi.fn().mockResolvedValue(5);
+        app.getUptime = vi.fn().mockResolvedValue(1000); // booted
+        app.getDevices = vi.fn();
+        app.scheduleRefresh = vi.fn();
+
+        await app.refresh();
+
+        expect(app.fetchDevices).toHaveBeenCalledOnce();
+        expect(app.getDevices).not.toHaveBeenCalled();
     });
 });
