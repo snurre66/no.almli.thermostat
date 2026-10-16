@@ -22,13 +22,13 @@ export class DeviceSettingsMapper {
             } else if (driverId === DRIVER_VHUMIDITY) {
                 t.zone = new DeviceSettingssZone();
                 t.zone.clazz = true;
+                t.invert = settings.invert;
             }
 
             t.contactAlarm = settings.contact_alarm;
             t.contactAlarmDelay = settings.contact_alarm_delay !== undefined ? settings.contact_alarm_delay * 1000 : 0;
             t.motionAlarm = settings.motion_alarm;
             t.hysteresis = settings.hysteresis;
-            t.invert = settings.invert;
             t.onoffEnabled = settings.onoff_enabled;
             t.deviceDelay = settings.device_delay;
             t.minOffDuration = settings.min_off_duration !== undefined ? settings.min_off_duration * 1000 : 0;

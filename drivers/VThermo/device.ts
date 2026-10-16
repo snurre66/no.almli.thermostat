@@ -28,8 +28,7 @@ module.exports = class VThermoDevice extends BaseDevice {
                 this.getCapabilityValue('thermostat_mode') === null ||
                 this.getCapabilityValue('thermostat_mode') === undefined
             ) {
-                const defaultMode = this.getSetting('invert') ? 'cool' : 'heat';
-                await this.setCapabilityValue('thermostat_mode', defaultMode).catch(err => this.logger.error(err));
+                await this.setCapabilityValue('thermostat_mode', 'heat').catch(err => this.logger.error(err));
             }
             if (!this.hasCapability('vt_cooling')) {
                 await this.addCapability('vt_cooling');
@@ -246,17 +245,6 @@ module.exports = class VThermoDevice extends BaseDevice {
         const merged = {...currentSettings, ...partialSettings};
         // @ts-ignore
         this.homey.app?.updateSettingsByDataId?.(this.getData().id, merged);
-    }
-
-    async updateInvertSwitch(invert: boolean): Promise<void> {
-        try {
-            await this.setSettings({invert});
-            this.syncLocalSettings({invert});
-            // @ts-ignore
-            this.homey.app.startCalculation();
-        } catch (err) {
-            this.logger.error('updateInvertSwitch ERROR', err);
-        }
     }
 
     async updateMeasureTemperature(temperature: number): Promise<void> {

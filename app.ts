@@ -31,6 +31,7 @@ module.exports = class VThermoApp extends Homey.App {
 
     async onInit(): Promise<void> {
         this.logger = new Logger({
+            logLevel: 1,
             logFunc: this.log,
             errorFunc: this.error,
         });
@@ -106,10 +107,6 @@ module.exports = class VThermoApp extends Homey.App {
             const changeLastMinutes = args.device.getValueStore().changePctPointsLastMinutes(args.minutes);
             return changeLastMinutes !== undefined && -1.0 * changeLastMinutes >= args.change_pct_points;
         });
-
-        this.homey.flow
-            .getActionCard('update_invert_switch')
-            .registerRunListener((args, state) => args.device.updateInvertSwitch(args.invert_switch === 'true'));
 
         this.homey.flow
             .getActionCard('vt_set_thermostat_mode')

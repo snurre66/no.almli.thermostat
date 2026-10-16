@@ -733,58 +733,6 @@
     ],
     "actions": [
       {
-        "id": "update_invert_switch",
-        "title": {
-          "en": "Enable or disable 'Invert switch'",
-          "no": "Aktiver eller deaktiver 'Inverter bryter'",
-          "nl": "Schakel 'Schakelaar omkeren' in of uit"
-        },
-        "titleFormatted": {
-          "en": "[[invert_switch]] 'Invert switch'",
-          "no": "[[invert_switch]] 'Inverter bryter'",
-          "nl": "[[invert_switch]] 'Schakelaar omkeren'"
-        },
-        "hint": {
-          "en": "Select 'Enable' and the thermostat will switch on if above the target, and switch off if below the target.",
-          "no": "Velg 'Aktiver' og termostaten vil slå seg på over målet og av under målet.",
-          "nl": "Selecteer 'Inschakelen' en de thermostaat schakelt in boven het doel en uit onder het doel."
-        },
-        "args": [
-          {
-            "type": "device",
-            "name": "device",
-            "filter": "driver_id=VThermo"
-          },
-          {
-            "name": "invert_switch",
-            "title": {
-              "en": "Invert switch",
-              "no": "Inverter bryter",
-              "nl": "Schakelaar omkeren"
-            },
-            "type": "dropdown",
-            "values": [
-              {
-                "id": "false",
-                "title": {
-                  "en": "Disable",
-                  "no": "Deaktiver",
-                  "nl": "Uitschakelen"
-                }
-              },
-              {
-                "id": "true",
-                "title": {
-                  "en": "Enable",
-                  "no": "Aktiver",
-                  "nl": "Inschakelen"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      {
         "id": "update_measure_temperature",
         "title": {
           "en": "Set temperature",
@@ -2551,21 +2499,6 @@
                 "en": "With a hysteresis value of 0.5, the temperature will vary between 0.5 below and 0.5 above the target temperature. A value of 0 switches whenever the temperature crosses the target and may cause rapid switching.",
                 "no": "Med en hystereseverdi på 0.5 varierer temperaturen mellom 0.5 under og 0.5 over måltemperatur.",
                 "nl": "Met een hysteresiswaarde van 0.5 varieert de temperatuur tussen 0.5 onder en 0.5 boven de doeltemperatuur."
-              }
-            },
-            {
-              "id": "invert",
-              "type": "checkbox",
-              "label": {
-                "en": "Invert switch",
-                "no": "Inverter bryterlogikk",
-                "nl": "Schakelaar omkeren"
-              },
-              "value": false,
-              "hint": {
-                "en": "Check this to invert the switching of the device.",
-                "no": "Kryss av her for å invertere inn/utkobling av enheten.",
-                "nl": "Vink dit aan om het schakelen van het apparaat om te keren."
               }
             },
             {

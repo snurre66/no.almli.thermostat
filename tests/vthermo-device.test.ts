@@ -91,7 +91,7 @@ describe('VThermo Homey device', () => {
         expect(setCapabilityOptions).toHaveBeenCalledWith('vt_condensation_alarm', expect.any(Object));
         expect(setCapabilityOptions).toHaveBeenCalledWith('vt_cooling', expect.any(Object));
         expect(setCapabilityOptions).toHaveBeenCalledWith('vt_onoff', expect.any(Object));
-        expect(setCapabilityValue).toHaveBeenCalledWith('thermostat_mode', 'cool');
+        expect(setCapabilityValue).toHaveBeenCalledWith('thermostat_mode', 'heat');
         expect(setCapabilityValue).toHaveBeenCalledWith('vt_cooling', false);
         expect(setCapabilityValue).toHaveBeenCalledWith('vt_thermostat_preset', 'comfort');
         expect(setCapabilityValue).toHaveBeenCalledWith('vt_condensation_alarm', false);
@@ -203,9 +203,8 @@ describe('VThermo Homey device', () => {
             target_step: 'step050',
         });
 
-        await device.updateInvertSwitch(true);
         await device.updateTargetTempOffset(1.5);
         await device.updateTargetUpdateEnabled(false);
-        expect(updateSettingsByDataId).toHaveBeenCalledTimes(5);
+        expect(updateSettingsByDataId).toHaveBeenCalledTimes(4);
     });
 });

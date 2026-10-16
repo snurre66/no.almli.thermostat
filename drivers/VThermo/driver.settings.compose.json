@@ -340,10 +340,6 @@
         "id": "hysteresis"
       },
       {
-        "$extends": "invert",
-        "id": "invert"
-      },
-      {
         "$extends": "onoff_enabled",
         "id": "onoff_enabled"
       }

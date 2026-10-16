@@ -6,6 +6,20 @@ Add a virtual thermostat to a zone with a temperature sensor and it will turn on
 
 Use a door/window sensor in the same zone to automatically turn off the heater on a contact alarm. This can be enabled with the 'Turn off if contact alarm' - checkbox in 'Advanced settings'.
 
+#### Cooling & Migrating from the Legacy Invert Switch
+
+`VThermo` natively supports **Heating (`Heat`)**, **Cooling (`Cool`)**, **Automatic (`Auto`)**, and **Off (`Off`)** thermostat modes, along with separate device settings for controlling **Heaters**, **Coolers**, **Smart sockets (heating)**, and **Smart sockets (cooling)**:
+
+- **Heating classes**: `heater`, `radiator`, `fireplace`, `boiler`, `waterheater`, `heatpump`
+- **Cooling classes**: `airconditioning`, `fan`, `fridge`, `freezer`, `fridge_and_freezer`, `airtreatment` (plus legacy `airconditioner`, `refrigerator`)
+
+> **Important – Migrating from the legacy "Invert switch":**
+> The legacy **Invert switch** setting and Flow action have been removed from `VThermo`. Heater-classified devices and smart plugs (`virtualClass: 'heater'`) are **never** allowed to be controlled as coolers.
+> If you previously used the legacy **Invert switch** with a smart socket configured as _"What's plugged in? → Heater"_ to control a cooling appliance (such as a wine cabinet, fridge, freezer, fan, or air conditioner):
+>
+> 1. Open the smart socket's settings in Homey and change **"What's plugged in?"** (`virtualClass`) from **Heater** to a cooling class (such as **Fridge**, **Freezer**, **Fridge & Freezer**, **Air Conditioner**, **Fan**, **Air Treatment**) or leave it as a plain socket / **Other**.
+> 2. In your `VThermo` Advanced settings, enable **Coolers** and/or **Smart sockets (cooling)** in the zone, and set the `VThermo` thermostat mode to **Cool** or **Auto**.
+
 #### Master thermostat
 
 The virtual thermostat can be used as a 'master thermostat'. As a master thermostat it will update the target temperature of other thermostats. Not only other VThermo - termostats, but standard phyical thermostats as well.
@@ -69,7 +83,6 @@ VThermo supports sensor and physical thermostat capabilities declared in Celsius
 - Set the target temperature
 - Set thermostat mode (Auto / Heat / Cool / Off)
 - Set thermostat preset (Comfort / Eco / Away / Boost)
-- Enable / disable 'Invert switch'
 - Update temperature to X °C
 - Update target temperature min, max and step
 - Update target temperature offset
@@ -209,7 +222,6 @@ Select temperature sensors from the sub zones of the virtual thermostat, just on
 #### General settings
 
 - Hysteresis: use a positive value to avoid switching the thermostat on and off too often. Example: with a value of 0.5 and a target temperature of 20.0 °C, the thermostat switches on below 19.5 °C and off above 20.5 °C. A value of 0 is supported and switches whenever the temperature crosses the target, but it can cause rapid switching and may reduce relay or heater lifetime. At exactly the target, the current state is retained.
-- Invert switch: check this and the thermostat will switch on if above the target, and switch off if below the target.
 - On / off enabled: uncheck this to disable the thermostat On / Off - switch.
 
 #### Timing
