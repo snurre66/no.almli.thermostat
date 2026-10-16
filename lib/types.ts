@@ -6,13 +6,27 @@ export class Zone {
 }
 
 export enum DeviceClass {
+    airconditioning = 'airconditioning',
     airconditioner = 'airconditioner',
-    heater = 'heater',
+    airpurifier = 'airpurifier',
+    airtreatment = 'airtreatment',
+    boiler = 'boiler',
+    dehumidifier = 'dehumidifier',
     fan = 'fan',
+    fireplace = 'fireplace',
+    freezer = 'freezer',
+    fridge = 'fridge',
+    fridge_and_freezer = 'fridge_and_freezer',
+    heater = 'heater',
+    heatpump = 'heatpump',
+    hood = 'hood',
+    humidifier = 'humidifier',
+    radiator = 'radiator',
     refrigerator = 'refrigerator',
     sensor = 'sensor',
     socket = 'socket',
     thermostat = 'thermostat',
+    waterheater = 'waterheater',
     vthermo = 'vthermo',
     vhumidity = 'vhumidity',
 }
@@ -194,7 +208,26 @@ export class DeviceRequests {
 export const DRIVER_VTHERMO = 'homey:app:no.almli.thermostat:VThermo';
 export const DRIVER_VHUMIDITY = 'homey:app:no.almli.thermostat:VHumidity';
 
-export const SUPPORTED_CLASSES = ['airconditioner', 'fan', 'heater', 'refrigerator', 'sensor', 'socket', 'thermostat'];
+export const HEATER_CLASSES = ['heater', 'radiator', 'fireplace', 'boiler', 'waterheater', 'heatpump'];
+
+export const COOLER_CLASSES = [
+    'airconditioning',
+    'airconditioner',
+    'fan',
+    'fridge',
+    'freezer',
+    'fridge_and_freezer',
+    'refrigerator',
+    'airtreatment',
+];
+
+export const THERMOSTAT_CLASSES = ['thermostat', 'airconditioning', 'airconditioner', 'heatpump', 'radiator'];
+
+export const HUMIDITY_CLASSES = ['fan', 'dehumidifier', 'humidifier', 'airtreatment', 'airpurifier', 'hood'];
+
+export const SUPPORTED_CLASSES = Array.from(
+    new Set([...HEATER_CLASSES, ...COOLER_CLASSES, ...THERMOSTAT_CLASSES, ...HUMIDITY_CLASSES, 'sensor', 'socket']),
+);
 
 export const CAPABILITY_ACTIVE = 'vt_onoff';
 export const CAPABILITY_COOLING = 'vt_cooling';

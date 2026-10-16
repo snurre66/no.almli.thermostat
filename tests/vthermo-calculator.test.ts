@@ -1008,6 +1008,46 @@ describe('VThermoDeviceCalculator switching', () => {
         );
         expect(vthermo.getLocalCapabilityValue(CAPABILITY_ACTIVE)?.value).toBe(false);
     });
+
+    it('matches all Homey SDK v3 cooling and heating virtualClasses (fridge, freezer, fridge_and_freezer, airconditioning, radiator, fireplace, boiler, waterheater, heatpump)', () => {
+        const root = makeZone('root');
+        const coolerDevices = ['fridge', 'freezer', 'fridge_and_freezer', 'airconditioning', 'airtreatment'].map(vc =>
+            makeDevice({
+                id: `cool-${vc}`,
+                zone: 'root',
+                deviceClass: DeviceClass.socket,
+                virtualClass: vc,
+                capabilities: {onoff: true},
+            }),
+        );
+        const heaterDevices = ['radiator', 'fireplace', 'boiler', 'waterheater', 'heatpump'].map(vc =>
+            makeDevice({
+                id: `heat-${vc}`,
+                zone: 'root',
+                deviceClass: DeviceClass.socket,
+                virtualClass: vc,
+                capabilities: {onoff: false},
+            }),
+        );
+
+        const calc = new VThermoDeviceCalculator(new Zones(), makeDevicesStub([...coolerDevices, ...heaterDevices]));
+
+        // Matched via 'coolers: true' OR 'sockets_coolers: true'
+        expect(calc.getCoolers(root, new Zones(), {zone: {coolers: true}}).map(d => d.id)).toEqual(
+            coolerDevices.map(d => d.id),
+        );
+        expect(calc.getCoolers(root, new Zones(), {zone: {clazz: true, sockets_coolers: true}}).map(d => d.id)).toEqual(
+            coolerDevices.map(d => d.id),
+        );
+
+        // Matched via 'clazz: true' (heaters) OR 'sockets_heaters: true'
+        expect(calc.getHeaters(root, new Zones(), {zone: {clazz: true}}).map(d => d.id)).toEqual(
+            heaterDevices.map(d => d.id),
+        );
+        expect(
+            calc.getHeaters(root, new Zones(), {zone: {coolers: true, sockets_heaters: true}}).map(d => d.id),
+        ).toEqual(heaterDevices.map(d => d.id));
+    });
 });
 
 describe('VThermoDeviceCalculator target propagation', () => {

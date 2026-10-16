@@ -5,14 +5,17 @@ import {
     CAPABILITY_COOLING,
     CAPABILITY_DEW_POINT,
     CAPABILITY_PRESET,
+    COOLER_CLASSES,
     Device,
     DeviceCapability,
     DeviceClass,
     DeviceRequest,
     DeviceRequests,
     DeviceSettings,
+    HEATER_CLASSES,
     TemperatureSettings,
     TemperatureSettingsZone,
+    THERMOSTAT_CLASSES,
     Zone,
 } from './types';
 import {DeviceCalculator} from './DeviceCalculator';
@@ -47,17 +50,12 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
             const temperatures = devices
                 ?.filter(d => {
                     const effectiveClass = d.virtualClass || d.class;
+                    const isThermostatClass = !!effectiveClass && THERMOSTAT_CLASSES.includes(effectiveClass);
                     return (
                         (tempSettings.sensor && effectiveClass === 'sensor') ||
-                        (tempSettings.thermostat &&
-                            (effectiveClass === 'thermostat' || effectiveClass === 'airconditioner') &&
-                            !d.isVThermo() &&
-                            !d.isVHumidity()) ||
+                        (tempSettings.thermostat && isThermostatClass && !d.isVThermo() && !d.isVHumidity()) ||
                         (tempSettings.vthermo && d.isVThermo()) ||
-                        (tempSettings.other &&
-                            effectiveClass !== 'sensor' &&
-                            effectiveClass !== 'thermostat' &&
-                            effectiveClass !== 'airconditioner')
+                        (tempSettings.other && effectiveClass !== 'sensor' && !isThermostatClass)
                     );
                 })
                 .filter(d => d.capabilitiesObj && d.capabilitiesObj.has('measure_temperature'))
@@ -649,7 +647,8 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
                 typeof thTemperature.value === 'number'
             ) {
                 let newTargetTemperature: number | undefined;
-                const isCoolerDevice = (thermostat.virtualClass || thermostat.class) === 'airconditioner';
+                const effectiveClass = thermostat.virtualClass || thermostat.class;
+                const isCoolerDevice = effectiveClass === 'airconditioner' || effectiveClass === 'airconditioning';
                 if (heatOnoff === true && thTargetTemperature.value < thTemperature.value + MIN_THERMOSTAT_ONOFF) {
                     newTargetTemperature = Math.ceil(thTemperature.value + THERMOSTAT_ONOFF);
                 } else if (
@@ -823,7 +822,7 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
             return false;
         }
         const effectiveClass = device.virtualClass || device.class;
-        if (includeHeaters && effectiveClass === 'heater') {
+        if (includeHeaters && !!effectiveClass && HEATER_CLASSES.includes(effectiveClass)) {
             return true;
         }
         if (
@@ -831,11 +830,9 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
             device.class === 'socket' &&
             (!device.virtualClass ||
                 device.virtualClass === 'socket' ||
-                device.virtualClass === 'heater' ||
-                ((device.virtualClass === 'airconditioner' ||
-                    device.virtualClass === 'fan' ||
-                    device.virtualClass === 'refrigerator') &&
-                    !coolerEnabledInZone))
+                device.virtualClass === 'other' ||
+                HEATER_CLASSES.includes(device.virtualClass) ||
+                (COOLER_CLASSES.includes(device.virtualClass) && !coolerEnabledInZone))
         ) {
             return true;
         }
@@ -852,10 +849,7 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
             return false;
         }
         const effectiveClass = device.virtualClass || device.class;
-        if (
-            includeCoolers &&
-            (effectiveClass === 'airconditioner' || effectiveClass === 'fan' || effectiveClass === 'refrigerator')
-        ) {
+        if (includeCoolers && !!effectiveClass && COOLER_CLASSES.includes(effectiveClass)) {
             return true;
         }
         if (
@@ -863,10 +857,9 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
             device.class === 'socket' &&
             (!device.virtualClass ||
                 device.virtualClass === 'socket' ||
-                device.virtualClass === 'airconditioner' ||
-                device.virtualClass === 'fan' ||
-                device.virtualClass === 'refrigerator' ||
-                (device.virtualClass === 'heater' && !heaterEnabledInZone))
+                device.virtualClass === 'other' ||
+                COOLER_CLASSES.includes(device.virtualClass) ||
+                (HEATER_CLASSES.includes(device.virtualClass) && !heaterEnabledInZone))
         ) {
             return true;
         }
@@ -991,7 +984,8 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
             const filtered = devices?.filter(d => {
                 const effectiveClass = d.virtualClass || d.class;
                 return (
-                    (effectiveClass === 'thermostat' || effectiveClass === 'airconditioner') &&
+                    !!effectiveClass &&
+                    THERMOSTAT_CLASSES.includes(effectiveClass) &&
                     !d.isVThermo() &&
                     !d.isVHumidity()
                 );

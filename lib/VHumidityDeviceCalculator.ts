@@ -7,6 +7,7 @@ import {
     DeviceRequest,
     DeviceRequests,
     DeviceSettings,
+    HUMIDITY_CLASSES,
     HumiditySettings,
     Zone,
 } from './types';
@@ -212,7 +213,12 @@ export class VHumidityDeviceCalculator extends DeviceCalculator {
             if (zone.children && deviceSettings.sub_zones && deviceSettings.sub_zones.clazz) {
                 zones.push(...zone.children);
             }
-            const devices = this.devicesObj.getDevicesFromZones(zones, DeviceClass.fan);
+            const devices = this.devicesObj.getDevicesFromZones(zones)?.filter(d => {
+                const effectiveClass = d.virtualClass || d.class;
+                return (
+                    !!effectiveClass && HUMIDITY_CLASSES.includes(effectiveClass) && !d.isVThermo() && !d.isVHumidity()
+                );
+            });
             if (devices) {
                 dcs.push(...devices);
             }
