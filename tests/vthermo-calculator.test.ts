@@ -920,14 +920,29 @@ describe('VThermoDeviceCalculator switching', () => {
                 .getHeaters(root, new Zones(), {zone: {clazz: true, sockets_heaters: false, thermostats: false}})
                 .map(d => d.id),
         ).toEqual(['heater-socket']);
-        // Even when sockets_coolers are enabled for coolers, heaterSocket must NOT be treated as a cooler
+        // When heaters are enabled in the zone (clazz: true), heaterSocket must NOT be cross-matched as a cooler
         expect(
             calc
                 .getCoolers(root, new Zones(), {
-                    zone: {clazz: false, coolers: true, sockets_coolers: true, thermostats: false},
+                    zone: {clazz: true, coolers: true, sockets_coolers: true, thermostats: false},
                 })
                 .map(d => d.id),
         ).toEqual(['fan-socket']);
+        // When heaters are NOT enabled in the zone (clazz: false, sockets_heaters: false) and sockets_coolers is enabled,
+        // any smart socket in the zone (even with virtualClass: 'heater') is controlled as a cooler
+        expect(
+            calc
+                .getCoolers(root, new Zones(), {
+                    zone: {
+                        clazz: false,
+                        coolers: false,
+                        sockets_heaters: false,
+                        sockets_coolers: true,
+                        thermostats: false,
+                    },
+                })
+                .map(d => d.id),
+        ).toEqual(['heater-socket', 'fan-socket']);
         expect(
             calc
                 .getThermostats(root, new Zones(), {zone: {clazz: false, sockets_heaters: false, thermostats: true}})
@@ -943,6 +958,55 @@ describe('VThermoDeviceCalculator switching', () => {
                 })
                 .map(c => c.value),
         ).toEqual([20]);
+    });
+
+    it('turns off a cooler socket with virtualClass heater in a cooler-only zone when temperature (11°C) is below setpoint (13.5°C)', () => {
+        const root = makeZone('vinskap');
+        const vthermo = makeVThermo({
+            id: 'vinskap-vthermo',
+            zone: 'vinskap',
+            capabilities: {
+                onoff: true,
+                thermostat_mode: 'auto',
+                measure_temperature: 11.0,
+                target_temperature: 13.5,
+                [CAPABILITY_ACTIVE]: false,
+                vt_cooling: false,
+            },
+            deviceSettings: {
+                hysteresis: 0.5,
+                onoffEnabled: false,
+                zone: {
+                    clazz: false,
+                    coolers: false,
+                    sockets_heaters: false,
+                    sockets_coolers: true,
+                    thermostats: false,
+                },
+                sub_zones: {
+                    clazz: false,
+                    coolers: false,
+                    sockets_heaters: false,
+                    sockets_coolers: false,
+                    thermostats: false,
+                },
+            },
+        });
+        const coolerPlug = makeDevice({
+            id: 'vinskap-kjoling',
+            zone: 'vinskap',
+            deviceClass: DeviceClass.socket,
+            virtualClass: DeviceClass.heater,
+            capabilities: {onoff: true},
+        });
+
+        const calc = new VThermoDeviceCalculator(new Zones(), makeDevicesStub([vthermo, coolerPlug]));
+        const requests = calc.calculateHeaterSwitching(vthermo, root).getRequests();
+
+        expect(requests).toContainEqual(
+            expect.objectContaining({id: 'vinskap-kjoling', capabilityId: 'onoff', value: false}),
+        );
+        expect(vthermo.getLocalCapabilityValue(CAPABILITY_ACTIVE)?.value).toBe(false);
     });
 });
 

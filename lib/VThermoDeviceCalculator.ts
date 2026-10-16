@@ -432,6 +432,24 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
             motionAlarm,
         );
 
+        const hasHeatersConfigured = !!(
+            deviceSettings.zone?.clazz ||
+            deviceSettings.zone?.sockets_heaters ||
+            deviceSettings.zone?.thermostats ||
+            deviceSettings.sub_zones?.clazz ||
+            deviceSettings.sub_zones?.sockets_heaters ||
+            deviceSettings.sub_zones?.thermostats
+        );
+        const hasCoolersConfigured = !!(
+            deviceSettings.zone?.coolers ||
+            deviceSettings.zone?.sockets_coolers ||
+            deviceSettings.sub_zones?.coolers ||
+            deviceSettings.sub_zones?.sockets_coolers
+        );
+        if (!hasHeatersConfigured && hasCoolersConfigured && heatOnoff === true) {
+            heatOnoff = false;
+        }
+
         if (overheatActive) {
             heatOnoff = false;
         }
@@ -795,7 +813,12 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
         return heatOnoff;
     }
 
-    private static isHeaterMatch(device: Device, includeHeaters?: boolean, includeSockets?: boolean): boolean {
+    private static isHeaterMatch(
+        device: Device,
+        includeHeaters?: boolean,
+        includeSockets?: boolean,
+        coolerEnabledInZone?: boolean,
+    ): boolean {
         if (device.isVThermo() || device.isVHumidity()) {
             return false;
         }
@@ -806,14 +829,25 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
         if (
             includeSockets &&
             device.class === 'socket' &&
-            (!device.virtualClass || device.virtualClass === 'socket' || device.virtualClass === 'heater')
+            (!device.virtualClass ||
+                device.virtualClass === 'socket' ||
+                device.virtualClass === 'heater' ||
+                ((device.virtualClass === 'airconditioner' ||
+                    device.virtualClass === 'fan' ||
+                    device.virtualClass === 'refrigerator') &&
+                    !coolerEnabledInZone))
         ) {
             return true;
         }
         return false;
     }
 
-    private static isCoolerMatch(device: Device, includeCoolers?: boolean, includeSockets?: boolean): boolean {
+    private static isCoolerMatch(
+        device: Device,
+        includeCoolers?: boolean,
+        includeSockets?: boolean,
+        heaterEnabledInZone?: boolean,
+    ): boolean {
         if (device.isVThermo() || device.isVHumidity()) {
             return false;
         }
@@ -831,7 +865,8 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
                 device.virtualClass === 'socket' ||
                 device.virtualClass === 'airconditioner' ||
                 device.virtualClass === 'fan' ||
-                device.virtualClass === 'refrigerator')
+                device.virtualClass === 'refrigerator' ||
+                (device.virtualClass === 'heater' && !heaterEnabledInZone))
         ) {
             return true;
         }
@@ -848,12 +883,14 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
         const dcs: Device[] = [];
         if (deviceSettings) {
             if (deviceSettings.zone && (deviceSettings.zone.clazz || deviceSettings.zone.sockets_heaters)) {
+                const coolerEnabled = !!(deviceSettings.zone.coolers || deviceSettings.zone.sockets_coolers);
                 const zoneDevices = this.devicesObj.getDevicesFromZones([zone]);
                 const filtered = zoneDevices?.filter(d =>
                     VThermoDeviceCalculator.isHeaterMatch(
                         d,
                         deviceSettings.zone?.clazz,
                         deviceSettings.zone?.sockets_heaters,
+                        coolerEnabled,
                     ),
                 );
                 if (filtered) {
@@ -865,12 +902,14 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
                 deviceSettings.sub_zones &&
                 (deviceSettings.sub_zones.clazz || deviceSettings.sub_zones.sockets_heaters)
             ) {
+                const coolerEnabled = !!(deviceSettings.sub_zones.coolers || deviceSettings.sub_zones.sockets_coolers);
                 const subDevices = this.devicesObj.getDevicesFromZones(zone.children);
                 const filtered = subDevices?.filter(d =>
                     VThermoDeviceCalculator.isHeaterMatch(
                         d,
                         deviceSettings.sub_zones?.clazz,
                         deviceSettings.sub_zones?.sockets_heaters,
+                        coolerEnabled,
                     ),
                 );
                 if (filtered) {
@@ -891,12 +930,14 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
         const dcs: Device[] = [];
         if (deviceSettings) {
             if (deviceSettings.zone && (deviceSettings.zone.coolers || deviceSettings.zone.sockets_coolers)) {
+                const heaterEnabled = !!(deviceSettings.zone.clazz || deviceSettings.zone.sockets_heaters);
                 const zoneDevices = this.devicesObj.getDevicesFromZones([zone]);
                 const filtered = zoneDevices?.filter(d =>
                     VThermoDeviceCalculator.isCoolerMatch(
                         d,
                         deviceSettings.zone?.coolers,
                         deviceSettings.zone?.sockets_coolers,
+                        heaterEnabled,
                     ),
                 );
                 if (filtered) {
@@ -908,12 +949,14 @@ export class VThermoDeviceCalculator extends DeviceCalculator {
                 deviceSettings.sub_zones &&
                 (deviceSettings.sub_zones.coolers || deviceSettings.sub_zones.sockets_coolers)
             ) {
+                const heaterEnabled = !!(deviceSettings.sub_zones.clazz || deviceSettings.sub_zones.sockets_heaters);
                 const subDevices = this.devicesObj.getDevicesFromZones(zone.children);
                 const filtered = subDevices?.filter(d =>
                     VThermoDeviceCalculator.isCoolerMatch(
                         d,
                         deviceSettings.sub_zones?.coolers,
                         deviceSettings.sub_zones?.sockets_coolers,
+                        heaterEnabled,
                     ),
                 );
                 if (filtered) {
