@@ -202,11 +202,48 @@ describe('VHumidityDeviceCalculator switching', () => {
         const root = makeZone('root', undefined, [child]);
         const rootFan = makeDevice({id: 'root-fan', zone: 'root', deviceClass: DeviceClass.fan});
         const childFan = makeDevice({id: 'child-fan', zone: 'child', deviceClass: DeviceClass.fan});
-        const calculator = new VHumidityDeviceCalculator(new Zones(), makeDevicesStub([rootFan, childFan]));
+        const virtualFan = makeDevice({
+            id: 'virtual-fan',
+            zone: 'child',
+            deviceClass: DeviceClass.socket,
+            virtualClass: DeviceClass.fan,
+        });
+        const calculator = new VHumidityDeviceCalculator(new Zones(), makeDevicesStub([rootFan, childFan, virtualFan]));
         expect(
             calculator
                 .getFans(root, new Zones(), {zone: {clazz: false}, sub_zones: {clazz: true}})
                 .map(device => device.id),
-        ).toEqual(['child-fan']);
+        ).toEqual(['child-fan', 'virtual-fan']);
+    });
+
+    it('turns off running fans immediately when main onoff switch is turned off even without humidity readings', () => {
+        const root = makeZone('root');
+        const virtual = makeVHumidity({
+            capabilities: {
+                onoff: false,
+                measure_humidity: null,
+                vh_target_humidity: null,
+                [CAPABILITY_ACTIVE]: false,
+            },
+            deviceSettings: {onoffEnabled: true},
+        });
+        const fan = makeDevice({id: 'fan', zone: 'root', deviceClass: DeviceClass.fan, capabilities: {onoff: true}});
+        const requests = new VHumidityDeviceCalculator(new Zones(), makeDevicesStub([virtual, fan]))
+            .calculateFanSwitching(virtual, root)
+            .getRequests();
+        expect(requests).toEqual([expect.objectContaining({id: 'fan', capabilityId: 'onoff', value: false})]);
+    });
+
+    it('includes devices with virtualClass sensor in getHumiditiesInZone', () => {
+        const root = makeZone('root');
+        const virtualSensor = makeDevice({
+            id: 'virtual-sensor',
+            zone: 'root',
+            deviceClass: DeviceClass.socket,
+            virtualClass: DeviceClass.sensor,
+            capabilities: {measure_humidity: 55},
+        });
+        const calculator = new VHumidityDeviceCalculator(new Zones(), makeDevicesStub([virtualSensor]));
+        expect(calculator.getHumiditiesInZone(root).map(c => c.value)).toEqual([55]);
     });
 });

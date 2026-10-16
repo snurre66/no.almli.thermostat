@@ -158,4 +158,54 @@ describe('VThermo Homey device', () => {
         expect(setCapabilityValue).toHaveBeenCalledWith('vt_thermostat_preset', 'boost');
         expect(startCalculation).toHaveBeenCalled();
     });
+
+    it('synchronizes local model and supports 0°C in Flow action methods', async () => {
+        const updateByDataId = vi.fn();
+        const updateSettingsByDataId = vi.fn();
+        const startCalculation = vi.fn();
+        const setCapabilityValue = vi.fn().mockResolvedValue(undefined);
+        const setCapabilityOptions = vi.fn().mockResolvedValue(undefined);
+        const setSettings = vi.fn().mockResolvedValue(undefined);
+        const getSettings = vi.fn().mockReturnValue({onoff_enabled: true});
+
+        const device = Object.assign(Object.create(VThermoDevice.prototype), {
+            homey: {
+                app: {updateByDataId, updateSettingsByDataId, startCalculation},
+            },
+            logger: {error: vi.fn(), info: vi.fn()},
+            getData: vi.fn().mockReturnValue({id: 'vthermo-data-1'}),
+            getSettings,
+            setSettings,
+            getCapabilityValue: vi.fn().mockReturnValue(0),
+            setCapabilityValue,
+            getCapabilityOptions: vi.fn().mockReturnValue({min: -5, max: 30, step: 0.5, decimals: 1}),
+            setCapabilityOptions,
+        });
+
+        await device.updateMeasureTemperature(0);
+        expect(setSettings).toHaveBeenCalledWith({calc_method: 'MANUAL'});
+        expect(updateSettingsByDataId).toHaveBeenCalledWith('vthermo-data-1', {
+            onoff_enabled: true,
+            calc_method: 'MANUAL',
+        });
+        expect(setCapabilityValue).toHaveBeenCalledWith('measure_temperature', 0);
+        expect(updateByDataId).toHaveBeenCalledWith('vthermo-data-1', 'measure_temperature', 0);
+
+        await device.updateTargetTempMinMaxStep(0, 20, 'step050');
+        expect(setCapabilityOptions).toHaveBeenCalledWith(
+            'target_temperature',
+            expect.objectContaining({min: 0, max: 20, step: 0.5}),
+        );
+        expect(updateSettingsByDataId).toHaveBeenCalledWith('vthermo-data-1', {
+            onoff_enabled: true,
+            target_min_temp: 0,
+            target_max_temp: 20,
+            target_step: 'step050',
+        });
+
+        await device.updateInvertSwitch(true);
+        await device.updateTargetTempOffset(1.5);
+        await device.updateTargetUpdateEnabled(false);
+        expect(updateSettingsByDataId).toHaveBeenCalledTimes(5);
+    });
 });

@@ -219,14 +219,14 @@ module.exports = class VThermoDevice extends BaseDevice {
             return this.homey.__('error.invalid_target_temps');
         }
         try {
-            if (min || max || step) {
-                if (min && capOptions.min !== min) {
+            if (min !== undefined || max !== undefined || step !== undefined) {
+                if (min !== undefined && capOptions.min !== min) {
                     capOptions.min = min;
                 }
-                if (max && capOptions.max !== max) {
+                if (max !== undefined && capOptions.max !== max) {
                     capOptions.max = max;
                 }
-                if (step && capOptions.step !== step) {
+                if (step !== undefined && capOptions.step !== step) {
                     capOptions.step = step;
                     capOptions.decimals = step >= 0.5 ? 1 : 2;
                 }
@@ -241,9 +241,17 @@ module.exports = class VThermoDevice extends BaseDevice {
         }
     }
 
+    private syncLocalSettings(partialSettings: Record<string, any>): void {
+        const currentSettings = typeof this.getSettings === 'function' ? this.getSettings() : {};
+        const merged = {...currentSettings, ...partialSettings};
+        // @ts-ignore
+        this.homey.app?.updateSettingsByDataId?.(this.getData().id, merged);
+    }
+
     async updateInvertSwitch(invert: boolean): Promise<void> {
         try {
             await this.setSettings({invert});
+            this.syncLocalSettings({invert});
             // @ts-ignore
             this.homey.app.startCalculation();
         } catch (err) {
@@ -252,15 +260,21 @@ module.exports = class VThermoDevice extends BaseDevice {
     }
 
     async updateMeasureTemperature(temperature: number): Promise<void> {
-        const temp = temperature ? Math.round(100 * temperature) / 100 : undefined;
-        if (!temp || temp < -150 || temp > 150) {
+        const temp =
+            typeof temperature === 'number' && !Number.isNaN(temperature)
+                ? Math.round(100 * temperature) / 100
+                : undefined;
+        if (temp === undefined || temp < -150 || temp > 150) {
             throw new Error(this.homey.__('error.invalid_temperature_input'));
         }
         try {
             this.logger.info('updateMeasureTemperature', temperature);
             const calc_method = 'MANUAL';
             await this.setSettings({calc_method});
+            this.syncLocalSettings({calc_method});
             await this.setCapabilityValue('measure_temperature', temp).catch(err => this.logger.error(err));
+            // @ts-ignore
+            this.homey.app?.updateByDataId?.(this.getData().id, 'measure_temperature', temp);
             // @ts-ignore
             this.homey.app.startCalculation();
         } catch (err) {
@@ -283,6 +297,7 @@ module.exports = class VThermoDevice extends BaseDevice {
         }
         try {
             await this.setSettings({target_min_temp, target_max_temp, target_step});
+            this.syncLocalSettings({target_min_temp, target_max_temp, target_step});
             // @ts-ignore
             this.homey.app.startCalculation();
             this.logger.info(
@@ -296,6 +311,7 @@ module.exports = class VThermoDevice extends BaseDevice {
     async updateTargetTempOffset(target_diff_temp: number): Promise<void> {
         try {
             await this.setSettings({target_diff_temp});
+            this.syncLocalSettings({target_diff_temp});
             // @ts-ignore
             this.homey.app.startCalculation();
             this.logger.info(`Target temperature offset updated to ${target_diff_temp}`);
@@ -307,6 +323,9 @@ module.exports = class VThermoDevice extends BaseDevice {
     async updateTargetUpdateEnabled(target_update_enabled: boolean): Promise<void> {
         try {
             await this.setSettings({target_update_enabled});
+            this.syncLocalSettings({target_update_enabled});
+            // @ts-ignore
+            this.homey.app?.startCalculation?.();
             this.logger.info(`Target temperature update enabled set to ${target_update_enabled}`);
         } catch (err) {
             this.logger.error('updateTargetUpdateEnabled ERROR', err);

@@ -27,6 +27,8 @@ module.exports = class VHumidityDevice extends BaseDevice {
                 }
                 throw new Error(this.homey.__('error.switching_disabled'));
             }
+            // @ts-ignore
+            this.homey.app.updateByDataId(this.getData().id, 'onoff', value);
         });
 
         this.registerCapabilityListener('vh_target_humidity', async (value, opts) => {
@@ -51,6 +53,19 @@ module.exports = class VHumidityDevice extends BaseDevice {
         return this._humidityStore;
     }
 
+    async updateTargetHumidity(value: number): Promise<void> {
+        await this.setCapabilityValue('vh_target_humidity', value).catch(err => this.logger.error(err));
+        await this.setCapabilityValue('vh_target_humidity_view', value).catch(err => this.logger.error(err));
+        await this.homey.flow
+            ?.getDeviceTriggerCard('vh_target_humidity_changed')
+            ?.trigger(this, {
+                humidity: value,
+            })
+            ?.catch((err: any) => this.logger.error(err));
+        // @ts-ignore
+        this.homey.app?.updateByDataId?.(this.getData().id, 'vh_target_humidity', value);
+    }
+
     async onSettings({
         oldSettings,
         newSettings,
@@ -65,7 +80,7 @@ module.exports = class VHumidityDevice extends BaseDevice {
             !newSettings.onoff_enabled &&
             this.getCapabilityValue('onoff') !== true
         ) {
-            this.setCapabilityValue('onoff', true).catch(err => this.log(err));
+            await this.setCapabilityValue('onoff', true).catch(err => this.logger.error(err));
         }
         // Keep the Web API-backed model in sync before calculation.
         // @ts-ignore

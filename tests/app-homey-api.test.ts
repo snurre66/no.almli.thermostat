@@ -142,5 +142,26 @@ describe('Homey API manager lifecycle', () => {
 
         expect(app.fetchDevices).toHaveBeenCalledOnce();
         expect(app.getDevices).not.toHaveBeenCalled();
+        // Because uptime (1000s) >= 600s, isHomeyBooting returns false on the initial refresh and only schedules the 24h REFRESH_INTERVAL
+        expect(app.scheduleRefresh).toHaveBeenCalledTimes(1);
+        expect(app.scheduleRefresh).toHaveBeenCalledWith(86400000);
+    });
+
+    it('schedules recalculation when zones are created, updated, or deleted', async () => {
+        const app = makeApp();
+        app.getZone = vi.fn().mockImplementation(async (id: string) => ({id, name: 'Zone 1', parent: 'root'}));
+        app.zonesObj = {
+            createOrUpdateZone: vi.fn(),
+            deleteZone: vi.fn(),
+        };
+        app.startCalculation = vi.fn();
+
+        await app._onZoneCreate({id: 'z1', name: 'Zone 1', parent: 'root'});
+        await app._onZoneUpdate({id: 'z1', name: 'Zone 1 Renamed', parent: 'root'});
+        await app._onZoneDelete({id: 'z1'});
+
+        expect(app.zonesObj.createOrUpdateZone).toHaveBeenCalledTimes(2);
+        expect(app.zonesObj.deleteZone).toHaveBeenCalledWith('z1');
+        expect(app.startCalculation).toHaveBeenCalledTimes(3);
     });
 });

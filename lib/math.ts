@@ -31,7 +31,8 @@ export const newest = (arr: any[]) =>
 export function dewPoint(temperature: number, humidity: number): number {
     const a = 17.27;
     const b = 237.7;
-    const alpha = (a * temperature) / (b + temperature) + Math.log(humidity / 100.0);
+    const clampedHumidity = Math.min(100, Math.max(0.1, humidity));
+    const alpha = (a * temperature) / (b + temperature) + Math.log(clampedHumidity / 100.0);
     return round((b * alpha) / (a - alpha));
 }
 

@@ -137,14 +137,18 @@ module.exports = class VThermoApp extends Homey.App {
             .getActionCard('update_target_update_enabled')
             .registerRunListener((args, state) => args.device.updateTargetUpdateEnabled(args.enabled === 'true'));
 
-        this.homey.flow.getActionCard('vh_set_target_humidity').registerRunListener((args, state) => {
-            args.device
+        this.homey.flow.getActionCard('vh_set_target_humidity').registerRunListener(async (args, state) => {
+            if (typeof args.device.updateTargetHumidity === 'function') {
+                await args.device.updateTargetHumidity(args.vh_target_humidity);
+                return;
+            }
+            await args.device
                 .setCapabilityValue('vh_target_humidity', args.vh_target_humidity)
                 .catch((err: any) => args.device.logger.error(err));
-            args.device
+            await args.device
                 .setCapabilityValue('vh_target_humidity_view', args.vh_target_humidity)
                 .catch((err: any) => args.device.logger.error(err));
-            return Promise.resolve();
+            this.updateByDataId(args.device.getData().id, 'vh_target_humidity', args.vh_target_humidity);
         });
     }
 
@@ -280,9 +284,6 @@ module.exports = class VThermoApp extends Homey.App {
 
     private async getSystemInfo(): Promise<any> {
         await this.getOrCreateHomeyApi();
-        if (!this.homeyApi.system.isConnected()) {
-            await this.homeyApi.system.connect();
-        }
         return this.homeyApi.system.getInfo();
     }
 
@@ -293,12 +294,18 @@ module.exports = class VThermoApp extends Homey.App {
 
     private async isHomeyBooting(deviceCount?: number): Promise<boolean> {
         const uptime = await this.getUptime();
+        const runningDevices = deviceCount !== undefined ? deviceCount : Object.keys(await this.getDevices()).length;
         if (uptime < 600) {
+            this._lastNumRunningDevices = runningDevices;
             this.logger.debug(`Homey is booting: Update: ${uptime} seconds.`);
             return true;
         }
-        const runningDevices = deviceCount !== undefined ? deviceCount : Object.keys(await this.getDevices()).length;
-        if (!this._lastNumRunningDevices || runningDevices !== this._lastNumRunningDevices) {
+        if (this._lastNumRunningDevices === undefined) {
+            this._lastNumRunningDevices = runningDevices;
+            this.logger.debug(`Homey is not booting`);
+            return false;
+        }
+        if (runningDevices !== this._lastNumRunningDevices) {
             this._lastNumRunningDevices = runningDevices;
             this.logger.debug(`Homey is booting: Current devices: ${runningDevices}`);
             return true;
@@ -434,6 +441,7 @@ module.exports = class VThermoApp extends Homey.App {
             const zone2 = await this.getZone(zone.id);
             if (zone2) {
                 this.zonesObj.createOrUpdateZone(zone2);
+                this.startCalculation();
             }
         } catch (err) {
             this.logger.error('Zone creation failed', err);
@@ -446,6 +454,7 @@ module.exports = class VThermoApp extends Homey.App {
             const zone2 = await this.getZone(zone.id);
             if (zone2) {
                 this.zonesObj.createOrUpdateZone(zone2);
+                this.startCalculation();
             }
         } catch (err) {
             this.logger.error('Zone update failed', err);
@@ -455,6 +464,7 @@ module.exports = class VThermoApp extends Homey.App {
     private async _onZoneDelete(zone: HomeyAPIV3Local.ManagerZones.Zone): Promise<void> {
         this.logger.silly(`Zone deleted: ${zone.id}`);
         this.zonesObj.deleteZone(zone.id);
+        this.startCalculation();
     }
 
     delay = (ms: number) => new Promise(resolve => this.homey.setTimeout(resolve, ms));

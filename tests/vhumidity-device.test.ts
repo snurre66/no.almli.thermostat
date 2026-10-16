@@ -45,4 +45,33 @@ describe('VHumidity Homey device', () => {
 
         expect(clear).toHaveBeenCalledOnce();
     });
+
+    it('synchronizes onoff capability listener and updateTargetHumidity with the local app model', async () => {
+        const listeners = new Map<string, (value: unknown, opts: unknown) => Promise<void>>();
+        const updateByDataId = vi.fn();
+        const setCapabilityValue = vi.fn().mockResolvedValue(undefined);
+        const trigger = vi.fn().mockResolvedValue(undefined);
+        const device = Object.assign(Object.create(VHumidityDevice.prototype), {
+            homey: {
+                __: vi.fn().mockReturnValue('Switching disabled'),
+                app: {updateByDataId},
+                flow: {getDeviceTriggerCard: vi.fn().mockReturnValue({trigger})},
+            },
+            logger: {error: vi.fn(), info: vi.fn()},
+            getData: vi.fn().mockReturnValue({id: 'humidity-data-id'}),
+            getSetting: vi.fn().mockReturnValue(true),
+            setCapabilityValue,
+            registerCapabilityListener: vi.fn((capId, listener) => listeners.set(capId, listener)),
+        });
+
+        await device.initialize();
+        await listeners.get('onoff')!(false, {});
+        expect(updateByDataId).toHaveBeenCalledWith('humidity-data-id', 'onoff', false);
+
+        await device.updateTargetHumidity(55);
+        expect(setCapabilityValue).toHaveBeenCalledWith('vh_target_humidity', 55);
+        expect(setCapabilityValue).toHaveBeenCalledWith('vh_target_humidity_view', 55);
+        expect(updateByDataId).toHaveBeenCalledWith('humidity-data-id', 'vh_target_humidity', 55);
+        expect(trigger).toHaveBeenCalledWith(device, {humidity: 55});
+    });
 });

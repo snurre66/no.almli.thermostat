@@ -58,4 +58,11 @@ describe('math', () => {
         expect(first).toMatch(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
         expect(second).not.toBe(first);
     });
+
+    it('computes dew point and safely clamps 0% or >100% relative humidity', () => {
+        expect(math.dewPoint(24, 95)).toBe(23.15);
+        expect(Number.isFinite(math.dewPoint(20, 0))).toBe(true);
+        expect(Number.isFinite(math.dewPoint(20, -5))).toBe(true);
+        expect(math.dewPoint(20, 105)).toBe(math.dewPoint(20, 100));
+    });
 });

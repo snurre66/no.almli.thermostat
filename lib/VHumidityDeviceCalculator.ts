@@ -38,7 +38,7 @@ export class VHumidityDeviceCalculator extends DeviceCalculator {
             const zones = Array.isArray(zone) ? zone : [zone];
             const devices = this.devicesObj.getDevicesFromZones(zones);
             const humidities = devices
-                ?.filter(d => d.class === 'sensor')
+                ?.filter(d => (d.virtualClass || d.class) === 'sensor')
                 .filter(d => d.capabilitiesObj && d.capabilitiesObj.has('measure_humidity'))
                 .map(d => d.capabilitiesObj && d.capabilitiesObj?.get('measure_humidity'));
             if (humidities) {
@@ -112,6 +112,17 @@ export class VHumidityDeviceCalculator extends DeviceCalculator {
             return requests;
         }
 
+        const mainOnoff = device.getLocalCapabilityValue('onoff');
+        if (deviceSettings.onoffEnabled && mainOnoff?.value === false) {
+            const dr = this.updateAndCreateDeviceRequestIfChanged(device, CAPABILITY_ACTIVE, false);
+            if (dr) {
+                dr.trigger = 'vh_onoff_false';
+            }
+            requests.addRequest(dr);
+            this.fansDeviceRequests(false, zone, deviceSettings, requests);
+            return requests;
+        }
+
         const targetHumidity = device.getLocalCapabilityValue('vh_target_humidity');
         if (!targetHumidity || targetHumidity.value === undefined || targetHumidity.value === null) {
             return requests;
@@ -130,18 +141,21 @@ export class VHumidityDeviceCalculator extends DeviceCalculator {
                 dr.trigger = `vh_onoff_${dr.value ? 'true' : 'false'}`;
             }
             requests.addRequest(dr);
-
-            const fans = this.getFans(zone, this.zonesObj, device.deviceSettings);
-            for (const fan of fans) {
-                const dr = this.updateAndCreateDeviceRequestIfChanged(fan, 'onoff', onoff);
-                if (dr && deviceSettings.deviceDelay && deviceSettings.deviceDelay > 0) {
-                    dr.deviceDelay = deviceSettings.deviceDelay;
-                }
-                requests.addRequest(dr);
-            }
+            this.fansDeviceRequests(onoff, zone, deviceSettings, requests);
         }
 
         return requests;
+    }
+
+    private fansDeviceRequests(onoff: boolean, zone: Zone, deviceSettings: DeviceSettings, requests: DeviceRequests) {
+        const fans = this.getFans(zone, this.zonesObj, deviceSettings);
+        for (const fan of fans) {
+            const dr = this.updateAndCreateDeviceRequestIfChanged(fan, 'onoff', onoff);
+            if (dr && deviceSettings.deviceDelay && deviceSettings.deviceDelay > 0) {
+                dr.deviceDelay = deviceSettings.deviceDelay;
+            }
+            requests.addRequest(dr);
+        }
     }
 
     /**
@@ -161,10 +175,10 @@ export class VHumidityDeviceCalculator extends DeviceCalculator {
             return;
         }
 
-        const currentOnoff = device.getLocalCapabilityValue('onoff').value;
-        const currentVtOnoff = device.getLocalCapabilityValue(CAPABILITY_ACTIVE).value;
+        const currentOnoff = device.getLocalCapabilityValue('onoff')?.value;
+        const currentVtOnoff = device.getLocalCapabilityValue(CAPABILITY_ACTIVE)?.value;
 
-        const mainOnoff = deviceSettings.onoffEnabled ? currentOnoff : true;
+        const mainOnoff = deviceSettings.onoffEnabled ? currentOnoff !== false : true;
 
         let onoff = undefined;
         if (!mainOnoff) {

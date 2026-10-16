@@ -4,13 +4,17 @@ import {Zone} from './types';
 export class Zones {
     logger: any;
     zonesAsTree?: Zone;
+    private extraRoots: Zone[] = [];
 
     constructor(zonesAsMap?: {[key: string]: HomeyAPIV3Local.ManagerZones.Zone}, logger?: any) {
         this.logger = logger;
         this.registerZones(zonesAsMap);
     }
 
-    destroy() {}
+    destroy() {
+        this.zonesAsTree = undefined;
+        this.extraRoots = [];
+    }
 
     /**
      * Return zones as a tree structure.
@@ -24,7 +28,20 @@ export class Zones {
      * @param id
      */
     getZone(id: string | undefined): Zone | undefined {
-        return id ? Zones.find(this.zonesAsTree, id) : undefined;
+        if (!id) {
+            return undefined;
+        }
+        const primary = Zones.find(this.zonesAsTree, id);
+        if (primary) {
+            return primary;
+        }
+        for (const root of this.extraRoots) {
+            const found = Zones.find(root, id);
+            if (found) {
+                return found;
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -33,7 +50,9 @@ export class Zones {
      */
     registerZones(zonesAsMap?: {[key: string]: HomeyAPIV3Local.ManagerZones.Zone}): void {
         if (zonesAsMap) {
-            this.zonesAsTree = Zones.createTree(zonesAsMap);
+            const roots = Zones.toSubTree(Zones.asList(zonesAsMap));
+            this.zonesAsTree = roots[0];
+            this.extraRoots = roots.slice(1);
             this.logger?.verbose(`Updated zones. (${this.getZonesAsList(this.zonesAsTree).length} zones)`);
         }
     }
@@ -55,6 +74,7 @@ export class Zones {
             }
             const t = Zones.toSubTree(zonesAsList);
             this.zonesAsTree = t[0];
+            this.extraRoots = t.slice(1);
             this.logger?.debug(`Updated zone: ${zone.id}. (${this.getZonesAsList(this.zonesAsTree).length} zones)`);
         }
     }
@@ -71,6 +91,7 @@ export class Zones {
                 zonesAsList.splice(idx, 1);
                 const t = Zones.toSubTree(zonesAsList);
                 this.zonesAsTree = t[0];
+                this.extraRoots = t.slice(1);
                 this.logger?.debug(`Deleted zone: ${zoneId}. (${this.getZonesAsList(this.zonesAsTree).length} zones)`);
             }
         }
@@ -84,6 +105,11 @@ export class Zones {
         const arr: Zone[] = [];
         if (tree) {
             Zones.convertToList(tree, arr);
+            if (tree === this.zonesAsTree && this.extraRoots.length > 0) {
+                for (const root of this.extraRoots) {
+                    Zones.convertToList(root, arr);
+                }
+            }
         }
         return arr;
     }
@@ -145,8 +171,9 @@ export class Zones {
     }
 
     private static toSubTree(items: Zone[], id: null | string = null): Zone[] {
+        const knownIds = id === null ? new Set(items.map(item => item.id)) : undefined;
         return items
-            .filter((item: any) => item.parent === id)
+            .filter((item: any) => (id === null ? !item.parent || !knownIds!.has(item.parent) : item.parent === id))
             .map((item: any) => ({...item, children: Zones.toSubTree(items, item.id)}));
     }
 

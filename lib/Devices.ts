@@ -7,6 +7,7 @@ import {
     DeviceClass,
     DeviceRequest,
     DeviceRequests,
+    SUBSCRIBED_CAPABILITIES,
     SUPPORTED_CAPABILITIES,
     SUPPORTED_CLASSES,
     Zone,
@@ -24,6 +25,7 @@ export class Devices {
     private logger: any;
     private calculator?: Calculator;
     private devices: Device[];
+    private devicesById: Map<string, Device>;
     private capabilityInstances: Map<string, HomeyAPIV3Local.ManagerDevices.Device.DeviceCapability>;
     private pendingPhysicalUpdates: Map<string, PendingPhysicalUpdate>;
 
@@ -33,6 +35,7 @@ export class Devices {
         this.capabilityInstances = new Map<string, HomeyAPIV3Local.ManagerDevices.Device.DeviceCapability>();
         this.pendingPhysicalUpdates = new Map<string, PendingPhysicalUpdate>();
         this.devices = new Array<Device>();
+        this.devicesById = new Map<string, Device>();
         this.registerDevices(devicesAsMap);
     }
 
@@ -61,7 +64,7 @@ export class Devices {
      * @param id
      */
     getDevice(id: string): Device | undefined {
-        return this.devices.find(d => d.id === id);
+        return this.devicesById.get(id) ?? this.devices.find(d => d.id === id);
     }
 
     /**
@@ -173,6 +176,7 @@ export class Devices {
                 }
             }
             this.devices.splice(idx, 1);
+            this.devicesById.delete(device.id);
             for (const key of this.pendingPhysicalUpdates.keys()) {
                 if (key.startsWith(`${device.id}_`)) {
                     this.pendingPhysicalUpdates.delete(key);
@@ -280,7 +284,7 @@ export class Devices {
         if (zone) {
             const zones = Array.isArray(zone) ? zone : [zone];
             const withContactAlarm = this.getDevicesFromZones(zones)
-                ?.filter(d => d.class === 'sensor')
+                ?.filter(d => (d.virtualClass || d.class) === 'sensor')
                 ?.filter(d => d.hasCapability('alarm_contact'))
                 ?.filter(d => d.getLocalCapabilityValue('alarm_contact').value === true);
             return !!(withContactAlarm && withContactAlarm.length > 0);
@@ -296,7 +300,7 @@ export class Devices {
         if (zone) {
             const zones = Array.isArray(zone) ? zone : [zone];
             const withContactAlarm = this.getDevicesFromZones(zones)
-                ?.filter(d => d.class === 'sensor')
+                ?.filter(d => (d.virtualClass || d.class) === 'sensor')
                 ?.filter(d => d.hasCapability('alarm_contact'))
                 ?.filter(d => d.getLocalCapabilityValue('alarm_contact')?.value === true);
             if (withContactAlarm && withContactAlarm.length > 0) {
@@ -304,7 +308,7 @@ export class Devices {
                 const ages = withContactAlarm.map(d => {
                     const lu = d.getLocalCapabilityValue('alarm_contact')?.lastUpdated;
                     const ts = typeof lu === 'number' ? lu : new Date(lu).getTime();
-                    return now - (isNaN(ts) ? now : ts);
+                    return Math.max(0, now - (isNaN(ts) ? now : ts));
                 });
                 return Math.max(...ages);
             }
@@ -324,7 +328,8 @@ export class Devices {
                 ?.map(d => d.getLocalCapabilityValue('measure_humidity')?.value)
                 ?.filter(v => typeof v === 'number' && !isNaN(v));
             if (withHumidity && withHumidity.length > 0) {
-                return withHumidity[0];
+                const sum = withHumidity.reduce((acc, v) => acc + v, 0);
+                return sum / withHumidity.length;
             }
         }
         return undefined;
@@ -338,7 +343,7 @@ export class Devices {
         if (zone) {
             const zones = Array.isArray(zone) ? zone : [zone];
             const withMotionAlarm = this.getDevicesFromZones(zones)
-                ?.filter(d => d.class === 'sensor')
+                ?.filter(d => (d.virtualClass || d.class) === 'sensor')
                 ?.filter(d => d.hasCapability('alarm_motion'))
                 ?.filter(d => d.getLocalCapabilityValue('alarm_motion').value === true);
             return !!(withMotionAlarm && withMotionAlarm.length > 0);
@@ -348,17 +353,23 @@ export class Devices {
 
     private registerDevice(device: HomeyAPIV3Local.ManagerDevices.Device): Device | undefined {
         if (this.validAndSupported(device)) {
-            const create = this.replaceCapabilityInstances(device, this.getDevice(device.id));
+            const existing = this.getDevice(device.id);
+            const create = this.replaceCapabilityInstances(device, existing);
             if (create) {
                 const deviceId = device.id;
                 const idx = this.devices.findIndex(d => d.id === deviceId);
                 const deviz = DeviceMapper.map(device);
+                if (existing) {
+                    deviz.frostAlarmActive = existing.frostAlarmActive;
+                    deviz.overheatAlarmActive = existing.overheatAlarmActive;
+                }
                 this.confirmPhysicalUpdates(deviz);
                 if (idx >= 0) {
                     this.devices[idx] = deviz;
                 } else {
                     this.devices.push(deviz);
                 }
+                this.devicesById.set(deviceId, deviz);
                 return deviz;
             }
         }
@@ -393,10 +404,13 @@ export class Devices {
         const supportedCapabilityIds = Object.keys(capabilities).filter(capabilityId =>
             SUPPORTED_CAPABILITIES.includes(capabilityId),
         );
-        const supportedCapabilityIdSet = new Set(supportedCapabilityIds);
+        const subscribedCapabilityIds = supportedCapabilityIds.filter(capabilityId =>
+            SUBSCRIBED_CAPABILITIES.includes(capabilityId),
+        );
+        const subscribedCapabilityIdSet = new Set(subscribedCapabilityIds);
 
         for (const capabilityId of current?.capabilitiesObj?.keys() ?? []) {
-            if (!supportedCapabilityIdSet.has(capabilityId)) {
+            if (!subscribedCapabilityIdSet.has(capabilityId)) {
                 this.destroyCapabilityInstance(capabilityIdFormat(device.id, capabilityId));
             }
         }
@@ -405,7 +419,7 @@ export class Devices {
             return true;
         }
 
-        for (const capabilityId of supportedCapabilityIds) {
+        for (const capabilityId of subscribedCapabilityIds) {
             this.makeCapabilityInstance(device, capabilityId);
         }
         return supportedCapabilityIds.length > 0;
@@ -414,6 +428,7 @@ export class Devices {
     private supportedDevice(device: HomeyAPIV3Local.ManagerDevices.Device): boolean {
         const ret =
             SUPPORTED_CLASSES.includes(device.class) ||
+            (!!device.virtualClass && SUPPORTED_CLASSES.includes(device.virtualClass)) ||
             device.capabilitiesObj.hasOwnProperty('measure_temperature') ||
             device.capabilitiesObj.hasOwnProperty('alarm_contact') ||
             device.capabilitiesObj.hasOwnProperty('alarm_motion');
@@ -509,8 +524,11 @@ export class Devices {
     }
 
     private async updatePhysicalDevice(dr: DeviceRequest): Promise<void> {
+        if (!dr.capabilityId) {
+            return;
+        }
         const key = capabilityIdFormat(dr.id, dr.capabilityId);
-        const pending = this.trackPhysicalUpdate(dr);
+        const pending = this.trackPhysicalUpdate(dr as {id: string; capabilityId: string; value?: any});
         try {
             const capability = this.getDevice(dr.id)?.getLocalCapabilityValue(dr.capabilityId);
             const apiValue = fromCanonicalTemperature(dr.capabilityId, dr.value, capability?.units);
@@ -538,7 +556,9 @@ export class Devices {
                 const localDevice = this.homey?.app.getDeviceByDataId(dr.dataId);
                 if (localDevice) {
                     try {
-                        await localDevice.setCapabilityValue(dr.capabilityId, dr.value);
+                        if (dr.capabilityId) {
+                            await localDevice.setCapabilityValue(dr.capabilityId, dr.value);
+                        }
                         // For VHumidity: add to value store
                         if (
                             localDevice.getValueStore &&
@@ -550,7 +570,13 @@ export class Devices {
                         }
                         if (!!dr.trigger) {
                             const tokens =
-                                dr.capabilityId === 'vt_dew_point' ? {dew_point: dr.value} : {state: dr.value ? 1 : 0};
+                                dr.capabilityId === 'vt_dew_point'
+                                    ? {dew_point: dr.value}
+                                    : dr.trigger.startsWith('vt_onoff_') ||
+                                        dr.trigger.startsWith('vt_cooling_') ||
+                                        dr.trigger.startsWith('vh_onoff_')
+                                      ? {state: dr.value ? 1 : 0}
+                                      : {};
                             await this.homey?.flow
                                 .getDeviceTriggerCard(dr.trigger)
                                 .trigger(localDevice, tokens, {})
@@ -559,7 +585,7 @@ export class Devices {
                                 );
                         }
                         this.logger?.verbose(
-                            `Update: ${dr.id}:${localDevice.getName()}:${dr.capabilityId} -> ${dr.value}`,
+                            `Update: ${dr.id}:${localDevice.getName()}:${dr.capabilityId ?? dr.trigger} -> ${dr.value}`,
                         );
                     } catch (err) {
                         this.logger?.error('Update devices: UPDATE LOCAL failed:', dr, err);

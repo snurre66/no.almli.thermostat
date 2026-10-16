@@ -33,6 +33,7 @@ export class Calculator {
     private clearCalculationTimeout(): void {
         if (this._calculateTimeout) {
             this.homey?.clearTimeout(this._calculateTimeout);
+            this._calculateTimeout = undefined;
         }
     }
 
@@ -48,11 +49,16 @@ export class Calculator {
     }
 
     private async execCalculate(): Promise<void> {
+        this._calculateTimeout = undefined;
         try {
             const calculationResponse = this.calculateDeviceRequests();
             const uniqueRequests = DeviceRequests.unique(calculationResponse);
             await this.devicesObj.updateDevices(uniqueRequests);
             this._calculationFailureCount = 0;
+            const pendingDelay = uniqueRequests.getNextCalculationDelay();
+            if (pendingDelay !== undefined && pendingDelay > 0 && !this._calculateTimeout) {
+                this.scheduleCalculation(pendingDelay);
+            }
         } catch (err) {
             this.logger?.error(`Calculation failed`, err);
             const retryDelay = CALCULATION_FAILURE_RETRY_DELAYS[this._calculationFailureCount];

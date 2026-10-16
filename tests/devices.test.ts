@@ -482,4 +482,118 @@ describe('Devices updates to Homey', () => {
         expect(logger.error).toHaveBeenCalled();
         expect(homey.app.setCapabilityValue).toHaveBeenCalledTimes(2);
     });
+
+    it('fires trigger-only requests with empty tokens without calling setCapabilityValue(undefined, ...)', async () => {
+        const setCapabilityValue = vi.fn().mockResolvedValue(undefined);
+        const trigger = vi.fn().mockResolvedValue(undefined);
+        const localDevice = {setCapabilityValue};
+        const homey = {
+            app: {
+                getDeviceByDataId: vi.fn().mockReturnValue(localDevice),
+                setCapabilityValue: vi.fn(),
+            },
+            flow: {
+                getDeviceTriggerCard: vi.fn().mockReturnValue({trigger}),
+            },
+        };
+        const devices = new Devices(undefined, homey);
+        const requests = new DeviceRequests();
+        requests.addRequest(
+            Object.assign(new DeviceRequest(), {
+                id: 'vthermo-1',
+                dataId: 'data-1',
+                capabilityId: undefined,
+                value: true,
+                trigger: 'vt_frost_alarm_true',
+            }),
+        );
+
+        await devices.updateDevices(requests);
+
+        expect(setCapabilityValue).not.toHaveBeenCalled();
+        expect(homey.flow.getDeviceTriggerCard).toHaveBeenCalledWith('vt_frost_alarm_true');
+        expect(trigger).toHaveBeenCalledWith(localDevice, {}, {});
+    });
+
+    it('skips capability subscriptions for output-only virtual capabilities and preserves alarm state on re-register', () => {
+        const makeCapabilityInstance = vi.fn().mockReturnValue({destroy: vi.fn()});
+        const rawVThermo: any = {
+            id: 'vt-1',
+            name: 'VThermo',
+            driverId: 'homey:app:no.almli.thermostat:VThermo',
+            class: 'thermostat',
+            zone: 'zone-1',
+            available: true,
+            ready: true,
+            data: {id: 'data-1'},
+            settings: {},
+            capabilities: [
+                'onoff',
+                'target_temperature',
+                'measure_temperature',
+                'vt_onoff',
+                'vt_cooling',
+                'vt_dew_point',
+                'vt_condensation_alarm',
+            ],
+            capabilitiesObj: {
+                onoff: {value: true},
+                target_temperature: {value: 20},
+                measure_temperature: {value: 20},
+                vt_onoff: {value: false},
+                vt_cooling: {value: false},
+                vt_dew_point: {value: 10},
+                vt_condensation_alarm: {value: false},
+            },
+            makeCapabilityInstance,
+        };
+
+        const devices = new Devices({[rawVThermo.id]: rawVThermo});
+        const subscribedCaps = makeCapabilityInstance.mock.calls.map(c => c[0]);
+        expect(subscribedCaps).toEqual(['onoff', 'target_temperature', 'measure_temperature']);
+        expect(subscribedCaps).not.toContain('vt_onoff');
+        expect(subscribedCaps).not.toContain('vt_cooling');
+        expect(subscribedCaps).not.toContain('vt_dew_point');
+        expect(subscribedCaps).not.toContain('vt_condensation_alarm');
+
+        const mapped = devices.getDevice('vt-1')!;
+        mapped.frostAlarmActive = true;
+        mapped.overheatAlarmActive = true;
+
+        devices.createOrUpdateDevice(rawVThermo);
+        expect(devices.getDevice('vt-1')?.frostAlarmActive).toBe(true);
+        expect(devices.getDevice('vt-1')?.overheatAlarmActive).toBe(true);
+    });
+
+    it('averages multiple humidity sensors in getHumidityInZone', () => {
+        const devices = new Devices({
+            s1: {
+                id: 's1',
+                name: 'Sensor 1',
+                driverId: 'sensor',
+                class: 'sensor',
+                zone: 'z1',
+                available: true,
+                ready: true,
+                capabilities: ['measure_humidity'],
+                capabilitiesObj: {measure_humidity: {value: 40}},
+                makeCapabilityInstance: vi.fn(),
+            },
+            s2: {
+                id: 's2',
+                name: 'Sensor 2',
+                driverId: 'sensor',
+                class: 'sensor',
+                zone: 'z1',
+                available: true,
+                ready: true,
+                capabilities: ['measure_humidity'],
+                capabilitiesObj: {measure_humidity: {value: 60}},
+                makeCapabilityInstance: vi.fn(),
+            },
+        } as any);
+
+        expect(devices.getHumidityInZone(makeZone('z1'))).toBe(50);
+        expect(devices.getHumidityInZone(makeZone('empty-zone'))).toBeUndefined();
+    });
 });

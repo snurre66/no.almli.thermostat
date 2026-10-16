@@ -61,6 +61,8 @@ export class Device {
     deviceSettings?: DeviceSettings;
     targetSettings?: TargetSettings;
     humiditySettings?: HumiditySettings;
+    frostAlarmActive?: boolean;
+    overheatAlarmActive?: boolean;
 
     isVThermo(): boolean {
         return this.driverId === DRIVER_VTHERMO;
@@ -121,7 +123,7 @@ export const capabilityIdFormat = (deviceId: string, capabilityId: string) => `$
 export class DeviceRequest {
     id!: string;
     dataId?: string;
-    capabilityId!: string;
+    capabilityId?: string;
     value?: any;
     trigger?: string;
     deviceDelay?: number;
@@ -130,6 +132,7 @@ export class DeviceRequest {
 
 export class DeviceRequests {
     requests: DeviceRequest[];
+    private nextCalculationDelay?: number;
 
     constructor() {
         this.requests = [];
@@ -147,10 +150,30 @@ export class DeviceRequests {
 
     addRequests(drs: DeviceRequests) {
         this.requests.push(...drs.getRequests().filter(dr => !!dr));
+        this.addPendingDelay(drs.getNextCalculationDelay());
+    }
+
+    addPendingDelay(delayMs?: number) {
+        if (typeof delayMs === 'number' && delayMs > 0 && !Number.isNaN(delayMs)) {
+            const rounded = Math.ceil(delayMs);
+            if (this.nextCalculationDelay === undefined || rounded < this.nextCalculationDelay) {
+                this.nextCalculationDelay = rounded;
+            }
+        }
+    }
+
+    getNextCalculationDelay(): number | undefined {
+        return this.nextCalculationDelay;
     }
 
     findIndex(dr: DeviceRequest): number {
-        return this.requests.findIndex(drx => drx.id === dr.id && drx.capabilityId === dr.capabilityId);
+        return this.requests.findIndex(
+            drx =>
+                drx.id === dr.id &&
+                (dr.capabilityId
+                    ? drx.capabilityId === dr.capabilityId
+                    : !drx.capabilityId && drx.trigger === dr.trigger),
+        );
     }
 
     static unique(requests: DeviceRequests): DeviceRequests {
@@ -163,6 +186,7 @@ export class DeviceRequests {
                 ret.addRequest(dr);
             }
         }
+        ret.addPendingDelay(requests.getNextCalculationDelay());
         return ret;
     }
 }
@@ -191,6 +215,18 @@ export const SUPPORTED_CAPABILITIES = [
     'alarm_motion',
     CAPABILITY_ACTIVE,
     CAPABILITY_COOLING,
+    'vh_target_humidity',
+];
+
+export const SUBSCRIBED_CAPABILITIES = [
+    'onoff',
+    'measure_temperature',
+    'measure_humidity',
+    'target_temperature',
+    'thermostat_mode',
+    CAPABILITY_PRESET,
+    'alarm_contact',
+    'alarm_motion',
     'vh_target_humidity',
 ];
 

@@ -140,4 +140,36 @@ describe('Calculator', () => {
         expect(calculate).toHaveBeenCalledTimes(4);
         vi.useRealTimers();
     });
+
+    it('schedules a follow-up calculation when a device calculator reports a pending delay', async () => {
+        vi.useFakeTimers();
+        const updateDevices = vi.fn().mockResolvedValue(undefined);
+        const calculator = new Calculator(
+            {getZones: () => makeZone('root'), getZonesAsList: () => [makeZone('root')]} as any,
+            {updateDevices} as any,
+            {setTimeout, clearTimeout},
+        );
+        const firstRun = new DeviceRequests();
+        firstRun.addPendingDelay(3_000);
+        const secondRun = requests({id: 'heater', capabilityId: 'onoff', value: false});
+        const calculate = vi.fn().mockReturnValueOnce(firstRun).mockReturnValueOnce(secondRun);
+        (calculator as any).vThermoCalculator = {calculate};
+        (calculator as any).vHumidityCalculator = {calculate: () => new DeviceRequests()};
+
+        calculator.startCalculation(10);
+        await vi.advanceTimersByTimeAsync(10);
+        expect(calculate).toHaveBeenCalledTimes(1);
+        expect(updateDevices).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(2_999);
+        expect(calculate).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(calculate).toHaveBeenCalledTimes(2);
+        expect(updateDevices).toHaveBeenCalledTimes(2);
+        expect(updateDevices.mock.calls[1][0].getRequests()).toEqual([
+            expect.objectContaining({id: 'heater', capabilityId: 'onoff', value: false}),
+        ]);
+        vi.useRealTimers();
+    });
 });

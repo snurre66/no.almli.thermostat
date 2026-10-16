@@ -67,4 +67,22 @@ describe('Zones', () => {
         expect(zones.getZonesAsList()).toEqual([]);
         expect(zones.getParentAndSubZones()).toEqual([]);
     });
+
+    it('preserves multiple top-level or orphaned zones in lookup and flattened list', () => {
+        const zones = new Zones({
+            root1: {id: 'root1', name: 'Main Home', parent: null},
+            child1: {id: 'child1', name: 'Bedroom', parent: 'root1'},
+            root2: {id: 'root2', name: 'Outbuilding', parent: null},
+            orphan: {id: 'orphan', name: 'Detached', parent: 'missing-parent'},
+        } as any);
+
+        expect(zones.getZone('root1')?.name).toBe('Main Home');
+        expect(zones.getZone('root2')?.name).toBe('Outbuilding');
+        expect(zones.getZone('orphan')?.name).toBe('Detached');
+        expect(zones.getZonesAsList(zones.getZones()).map(z => z.id)).toEqual(['root1', 'child1', 'root2', 'orphan']);
+
+        zones.deleteZone('root2');
+        expect(zones.getZone('root2')).toBeUndefined();
+        expect(zones.getZonesAsList(zones.getZones()).map(z => z.id)).toEqual(['root1', 'child1', 'orphan']);
+    });
 });

@@ -55,4 +55,26 @@ describe('domain types', () => {
             expect.objectContaining({capabilityId: 'target_temperature', value: 20}),
         ]);
     });
+
+    it('deduplicates trigger-only requests by trigger name and tracks shortest pending calculation delay', () => {
+        const left = new DeviceRequests();
+        left.addRequest(Object.assign(new DeviceRequest(), {id: 'a', trigger: 'vt_frost_alarm_true', value: true}));
+        left.addRequest(
+            Object.assign(new DeviceRequest(), {id: 'a', trigger: 'vt_overheat_alarm_false', value: false}),
+        );
+        left.addRequest(Object.assign(new DeviceRequest(), {id: 'a', trigger: 'vt_frost_alarm_true', value: true}));
+        left.addPendingDelay(5000);
+
+        const right = new DeviceRequests();
+        right.addPendingDelay(2000);
+        right.addPendingDelay(0);
+        left.addRequests(right);
+
+        const unique = DeviceRequests.unique(left);
+        expect(unique.getRequests()).toEqual([
+            expect.objectContaining({id: 'a', trigger: 'vt_frost_alarm_true', value: true}),
+            expect.objectContaining({id: 'a', trigger: 'vt_overheat_alarm_false', value: false}),
+        ]);
+        expect(unique.getNextCalculationDelay()).toBe(2000);
+    });
 });
