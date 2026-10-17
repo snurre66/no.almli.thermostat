@@ -85,7 +85,8 @@ Keep calculations deterministic and side-effect-light. New calculation logic sho
 ## Thermostat and humidity invariants
 
 - Preserve hysteresis and the current on/off state around thresholds; avoid logic that rapidly toggles devices.
-- Respect `invert`, contact-alarm, motion-alarm, and `onoff_enabled` behavior when changing thermostat switching.
+- Respect `thermostat_mode` (`heat`, `cool`, `auto`, `off`), presets (`comfort`, `eco`, `away`, `boost`), contact-alarm (with delay), motion-alarm, safety alarms (`frost`, `overheat`, `condensation`), anti-short-cycling (`minOnDuration`, `minOffDuration`), and `onoff_enabled` behavior when changing thermostat switching. (`invert` is only used by `VHumidity` for humidifiers; it is removed from `VThermo`.)
+- Keep heating (`HEATER_CLASSES`) and cooling (`COOLER_CLASSES`) device/virtualClass matching strictly disjoint: never allow a heater-classified socket (`virtualClass` in `HEATER_CLASSES`) to be controlled as a cooler, or a cooler-classified socket (`virtualClass` in `COOLER_CLASSES`) to be controlled as a heater.
 - Treat missing, `null`, unavailable, stale, or invalid sensor values explicitly. Do not coerce an absent reading into zero.
 - Preserve manual temperature mode: automatic sensor aggregation must not overwrite a manually supplied temperature.
 - Apply target-temperature offsets and min/max limits before producing propagation requests.
